@@ -14,6 +14,7 @@ def compare_block_to_torch(block: blocks.Block, x, y=None, seed=42):
     dz = torch.randn(*z.shape) if z.dim() > 0 else torch.tensor(1.0)
     # Backward pass (ours)
     dx = block.backward(dz)
+    print(block)
 
     # Attach autograd gradients to params and input and re-run forward pass on
     # the same input

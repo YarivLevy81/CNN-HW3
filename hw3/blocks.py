@@ -208,7 +208,7 @@ class Sigmoid(Block):
         # TODO: Implement gradient w.r.t. the input x
         # ====== YOUR CODE: ======
         x = self.grad_cache['x'] #sigmoids results from last fordward pass
-        dx = x*(1-x)
+        dx = x*(1-x)*dout
         # ========================
 
         return dx

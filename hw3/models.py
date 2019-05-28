@@ -30,13 +30,36 @@ class MLP(Block):
         :param: Dropout probability. Zero means no dropout.
         """
         blocks = []
+        self.in_features = in_features
+        self.num_classes = num_classes
+        self.hidden_features = hidden_features
+        self.dropout = dropout
 
         # TODO: Build the MLP architecture as described.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        linear_kw = {'wstd': kw['wstd']} if 'wstd' in kw else {}
+        
+        blocks.append(Linear(in_features, hidden_features[0], **linear_kw))
+        if activation =='relu':
+            blocks.append(ReLU())
+        else:
+            blocks.append(Sigmoid())
+            
+        if dropout: blocks.append(Dropout(p=dropout))
+            
+        for i in range(len(hidden_features)-1):  
+            blocks.append(Linear(hidden_features[i], hidden_features[i+1], **linear_kw))
+            if activation =='relu':
+                blocks.append(ReLU())
+            else:
+                blocks.append(Sigmoid())
+            if dropout: blocks.append(Dropout(p=dropout))
+        ## add last layer
+        blocks.append(Linear(hidden_features[-1], num_classes, **linear_kw))
+            
         # ========================
-
         self.sequence = Sequential(*blocks)
+
 
     def forward(self, x, **kw):
         return self.sequence(x, **kw)
@@ -90,6 +113,7 @@ class ConvClassifier(nn.Module):
         # Use only dimension-preserving 3x3 convolutions. Apply 2x2 Max
         # Pooling to reduce dimensions.
         # ====== YOUR CODE: ======
+        return
         raise NotImplementedError()
 
         # ========================
@@ -105,6 +129,7 @@ class ConvClassifier(nn.Module):
         # You'll need to calculate the number of features first.
         # The last Linear layer should have an output dimension of out_classes.
         # ====== YOUR CODE: ======
+        return
         raise NotImplementedError()
         # ========================
         seq = nn.Sequential(*layers)
@@ -115,6 +140,7 @@ class ConvClassifier(nn.Module):
         # Extract features from the input, run the classifier on them and
         # return class scores.
         # ====== YOUR CODE: ======
+        return
         raise NotImplementedError()
         # ========================
         return out
@@ -129,6 +155,6 @@ class YourCodeNet(ConvClassifier):
     # For example, add batchnorm, dropout, skip connections, change conv
     # filter sizes etc.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    #raise NotImplementedError()
     # ========================
 
