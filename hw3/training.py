@@ -294,7 +294,19 @@ class BlocksTrainer(Trainer):
         # - Optimize params
         # - Calculate number of correct predictions
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        if self.device:
+            X = X.to(self.device)
+            y = y.to(self.device)
+            
+        class_scores = self.model(X)               # Forward pass
+        self.optimizer.zero_grad()                 # Zero Gradient of weights
+        loss = self.loss_fn(class_scores, y)       # Calculate loss
+        loss.backward()                            # Backward pass
+        self.optimizer.step()                      # Optimize params
+        y_pred = torch.argmax(class_scores, dim=1) # Take for each data-point the model prediction
+        num_correct = torch.sum(y == y_pred)       # Count number of successfull classifications  
+#         num_correct = torch.sum(y == y_pred).to('cpu').detach().numpy()
+#         loss = loss.to('cpu').detach().numpy().tolist()
         # ========================
 
         return BatchResult(loss, num_correct)

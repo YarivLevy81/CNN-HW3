@@ -83,9 +83,7 @@ class Linear(Block):
         self.db = torch.zeros_like(self.b)
 
     def params(self):
-        return [
-            (self.w, self.dw), (self.b, self.db)
-        ]
+        return [(self.w, self.dw), (self.b, self.db)]
 
     def forward(self, x, **kw):
         """

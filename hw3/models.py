@@ -56,7 +56,15 @@ class MLP(Block):
             if dropout: blocks.append(Dropout(p=dropout))
         ## add last layer
         blocks.append(Linear(hidden_features[-1], num_classes, **linear_kw))
-            
+
+
+#         linear_kw = {'wstd': kw['wstd']} if 'wstd' in kw else {}
+#         for Din, Dout in zip([in_features] + hidden_features, hidden_features):
+#             blocks.append(Linear(Din, Dout, **linear_kw))
+#             blocks.append(ReLU())
+#             if dropout:
+#                 blocks.append(Dropout(p=dropout))
+#         blocks.append(Linear(hidden_features[-1], num_classes, **linear_kw))    
         # ========================
         self.sequence = Sequential(*blocks)
 
