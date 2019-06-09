@@ -3,7 +3,7 @@ import os
 import sys
 import tqdm
 import torch
-
+import numpy as np
 from torch.utils.data import DataLoader
 from typing import Callable, Any
 from pathlib import Path
@@ -32,7 +32,7 @@ class Trainer(abc.ABC):
         self.loss_fn = loss_fn
         self.optimizer = optimizer
         self.device = device
-        model.to(self.device)
+        #model.to(self.device) #problematic line
 
     def fit(self, dl_train: DataLoader, dl_test: DataLoader,
             num_epochs, checkpoints: str = None,
@@ -85,7 +85,30 @@ class Trainer(abc.ABC):
             # - Implement early stopping. This is a very useful and
             #   simple regularization technique that is highly recommended.
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            train_result = self.train_epoch(dl_train, verbose=verbose)
+            train_loss.extend(train_result.losses)
+            train_acc.append(train_result.accuracy)
+            test_result = self.test_epoch(dl_test, verbose=verbose)
+            test_loss.extend(test_result.losses)
+            test_acc.append(test_result.accuracy)
+            
+            # implemeting early-stopping
+            if epoch==0: #1st epoch
+                current_loss = np.mean(test_result.losses)
+            else: #check result with last epoch
+                prev_loss = current_loss
+                current_loss = np.mean(test_result.losses)
+                
+                if current_loss < prev_loss:
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+            
+            if early_stopping and epochs_without_improvement >= early_stopping:
+                actual_num_epochs = epoch
+                break
+                
+            
             # ========================
 
             # Save model checkpoint if requested
@@ -298,15 +321,14 @@ class BlocksTrainer(Trainer):
             X = X.to(self.device)
             y = y.to(self.device)
             
-        class_scores = self.model(X)               # Forward pass
-        self.optimizer.zero_grad()                 # Zero Gradient of weights
-        loss = self.loss_fn(class_scores, y)       # Calculate loss
-        loss.backward()                            # Backward pass
-        self.optimizer.step()                      # Optimize params
-        y_pred = torch.argmax(class_scores, dim=1) # Take for each data-point the model prediction
-        num_correct = torch.sum(y == y_pred)       # Count number of successfull classifications  
-#         num_correct = torch.sum(y == y_pred).to('cpu').detach().numpy()
-#         loss = loss.to('cpu').detach().numpy().tolist()
+        class_scores = self.model(X)
+        loss = self.loss_fn(class_scores, y).numpy()
+        self.optimizer.zero_grad()
+        dout = self.loss_fn.backward()
+        self.model.backward(dout)
+        self.optimizer.step()
+        y_pred = torch.argmax(class_scores, dim=1)
+        num_correct = torch.sum(y == y_pred).numpy()
         # ========================
 
         return BatchResult(loss, num_correct)
@@ -318,7 +340,10 @@ class BlocksTrainer(Trainer):
         # - Forward pass
         # - Calculate number of correct predictions
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        class_scores = self.model(X)
+        loss = self.loss_fn(class_scores, y).numpy()
+        y_pred = torch.argmax(class_scores, dim=1)
+        num_correct = torch.sum(y == y_pred).numpy()
         # ========================
 
         return BatchResult(loss, num_correct)

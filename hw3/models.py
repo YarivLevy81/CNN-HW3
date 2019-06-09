@@ -108,9 +108,10 @@ class ConvClassifier(nn.Module):
         self.filters = filters
         self.pool_every = pool_every
         self.hidden_dims = hidden_dims
-
+        self.num_pool_layers =0
         self.feature_extractor = self._make_feature_extractor()
         self.classifier = self._make_classifier()
+        
 
     def _make_feature_extractor(self):
         in_channels, in_h, in_w, = tuple(self.in_size)
@@ -121,9 +122,12 @@ class ConvClassifier(nn.Module):
         # Use only dimension-preserving 3x3 convolutions. Apply 2x2 Max
         # Pooling to reduce dimensions.
         # ====== YOUR CODE: ======
-        return
-        raise NotImplementedError()
-
+        for i, (in_chnl, out_chnl) in enumerate(zip([in_channels] + self.filters, self.filters)):
+            layers.extend([nn.Conv2d(in_chnl, out_chnl, kernel_size=3, stride=1, padding=1), nn.ReLU()])
+            #add new conv2d layer
+            if (i+1)%self.pool_every == 0:
+                layers.append(nn.MaxPool2d(2))
+                self.num_pool_layers += 1
         # ========================
         seq = nn.Sequential(*layers)
         return seq
@@ -137,8 +141,14 @@ class ConvClassifier(nn.Module):
         # You'll need to calculate the number of features first.
         # The last Linear layer should have an output dimension of out_classes.
         # ====== YOUR CODE: ======
-        return
-        raise NotImplementedError()
+        resize_factor = 2 ** self.num_pool_layers
+        # 2 is the stride. Every time we pass through and pool-layer we got this resize factor
+        number_of_features_first_layer_input = (in_h // resize_factor)*(in_w // resize_factor) * self.filters[-1]
+        for layer_dim_input, layer_dim_output in zip([number_of_features_first_layer_input] + self.hidden_dims, self.hidden_dims):
+            layers.extend([nn.Linear(layer_dim_input, layer_dim_output), nn.ReLU()])
+            
+        # Now add last layer
+        layers.extend([nn.Linear(self.hidden_dims[-1], self.out_classes), nn.ReLU()])
         # ========================
         seq = nn.Sequential(*layers)
         return seq
@@ -148,8 +158,12 @@ class ConvClassifier(nn.Module):
         # Extract features from the input, run the classifier on them and
         # return class scores.
         # ====== YOUR CODE: ======
-        return
-        raise NotImplementedError()
+        out = self.feature_extractor(x)
+        # since the output of the feature extractor is a 4D tensor and the
+        # classifier expects 2D tensor, flatten it
+        out = out.view(out.size(0), -1)
+        # classify
+        out = self.classifier(out)
         # ========================
         return out
 
