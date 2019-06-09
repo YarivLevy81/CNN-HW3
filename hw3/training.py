@@ -366,13 +366,13 @@ class TorchTrainer(Trainer):
         # - Calculate number of correct predictions
         # ====== YOUR CODE: ======
         class_scores = self.model(X)
-        loss = self.loss_fn(class_scores, y).numpy()
         self.optimizer.zero_grad()
-        dout = self.loss_fn.backward()
-        self.model.backward(dout)
+        loss = self.loss_fn(class_scores, y)
+        loss.backward()
         self.optimizer.step()
         y_pred = torch.argmax(class_scores, dim=1)
-        num_correct = torch.sum(y == y_pred).numpy()
+        num_correct = torch.sum(y == y_pred).to('cpu').detach().numpy()
+        loss = loss.to('cpu').detach().numpy().tolist()
         # ========================
 
         return BatchResult(loss, num_correct)
