@@ -68,7 +68,8 @@ def chars_to_onehot(text: str, char_to_idx: dict) -> Tensor:
     # ====== YOUR CODE: ======
     result = torch.zeros((len(text),len(char_to_idx.keys())),dtype = torch.int8)
     for i,char in enumerate(text):
-        result[i][char_to_idx[char]] = 1
+        index = char_to_idx[char]
+        result[i][index] = 1
     # ========================
     return result
 
@@ -90,7 +91,6 @@ def onehot_to_chars(embedded_text: Tensor, idx_to_char: dict) -> str:
     result = ""
     for char_one_hot_encoded in embedded_text: #iterate every row - every row is a char
         index = np.where(char_one_hot_encoded == 1)[0][0]
-#         print(type(char_one_hot_encoded))
         result += idx_to_char[index]
     # ========================
     return result
@@ -122,14 +122,16 @@ def chars_to_labelled_samples(text: str, char_to_idx: dict, seq_len: int,
     # ====== YOUR CODE: ======
     import numpy as np
     embeded_text = chars_to_onehot(text[:-1], char_to_idx) #no need of last char
-    splits = torch.split(embeded_text, seq_len, 0) #split the embeded_text every seq_len rows
+    
+    #embeded_text is a one_hot "tensor" of all text
+    
+    splits = torch.split(embeded_text, seq_len, 0) #split the embeded_text every seq_len rows 
+    #splits is a list of 2D-tensors
     if(splits[-1].shape[0] != splits[0].shape[0]): #if the last split its not a complete one, drop it
         splits = splits[:-1]
     samples = torch.stack(splits)           #stack them together in one tensor
+    # samples is a 3D-tensor
     N = samples.shape[0]
-    print("length of text is" + str(len(text)))
-    print("N is " + str(N))
-    print(seq_len*(N-1)+seq_len-1)
     labels = torch.zeros((N,seq_len),dtype = torch.int8)
     for i in range(N):
         for j in range(seq_len):
@@ -149,9 +151,10 @@ def hot_softmax(y, dim=0, temperature=1.0):
     :return: Softmax computed with the temperature parameter.
     """
     # TODO: Implement based on the above.
-    # ====== YOUR CODE: ======
-    raise NotImplementedError()
-    # ========================
+    if temperature == 0.0:
+        raise ValueError("Temperature must not be zero")
+
+    result = F.softmax(y / temperature, dim=dim)
     return result
 
 
@@ -186,7 +189,18 @@ def generate_from_model(model, start_sequence, n_chars, char_maps, T):
     # necessary for this. Best to disable tracking for speed.
     # See torch.no_grad().
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    with torch.no_grad():
+        x = torch.unsqueeze(chars_to_onehot(start_sequence, char_to_idx), 0)
+        h = None
+
+        for i in range(n_chars - len(start_sequence)):
+            x = x.to(dtype=torch.float)
+            x = x.to(device)
+            y, h = model(x, hidden_state=h)
+            proba = hot_softmax(y[0, -1, :], temperature=T)
+            x_idx = torch.multinomial(proba, 1)
+            out_text += idx_to_char[x_idx.item()]
+            x = torch.unsqueeze(chars_to_onehot(out_text[-1], char_to_idx), 0)
     # ========================
 
     return out_text
@@ -230,7 +244,32 @@ class MultilayerGRU(nn.Module):
         #     then call self.register_parameter() on them. Also make
         #     sure to initialize them. See functions in torch.nn.init.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.layer_params.append((nn.Linear(in_dim, 1, bias=True),
+                                  nn.Linear(h_dim, 1, bias=False),
+                                  nn.Linear(in_dim, 1, bias=True),
+                                  nn.Linear(h_dim, 1, bias=False),
+                                  nn.Linear(in_dim, h_dim, bias=True),
+                                  nn.Linear(h_dim, h_dim, bias=False),
+                                  nn.Dropout(p=dropout)))
+
+        for i in range(n_layers - 1):
+            weights_xz = nn.Linear(h_dim, 1, bias=True)
+            weights_hz = nn.Linear(h_dim, 1, bias=False)
+            weights_xr = nn.Linear(h_dim, 1, bias=True)
+            weights_hr = nn.Linear(h_dim, 1, bias=False)
+            weights_xg = nn.Linear(h_dim, h_dim, bias=True)
+            weights_hg = nn.Linear(h_dim, h_dim, bias=False)
+            drop = nn.Dropout(p=dropout)
+            self.layer_params.append((weights_xz, weights_hz,
+                                      weights_xr, weights_hr,
+                                      weights_xg, weights_hg,
+                                      drop))
+
+        for i, layer in enumerate(self.layer_params):
+            for j, param in enumerate(layer):
+                self.add_module(f'param_l{i}_p{j}', param)
+
+        self.weights_hy = nn.Linear(h_dim, out_dim, bias=True)
         # ========================
 
     def forward(self, input: Tensor, hidden_state: Tensor=None):
@@ -264,7 +303,22 @@ class MultilayerGRU(nn.Module):
         # You'll need to go layer-by-layer from bottom to top (see diagram).
         # Tip: You can use torch.stack() to combine multiple tensors into a
         # single tensor in a differentiable manner.
-        # ====== YOUR CODE: ======
-        raise NotImplementedError()
-        # ========================
+        y = torch.zeros_like(layer_input)
+        for s in range(seq_len):
+            x = layer_input[:, s, :]
+            for i, (h, (w_xz, w_hz, w_xr, w_hr, w_xg, w_hg, drop)) in enumerate(zip(layer_states, self.layer_params)):
+                z = torch.sigmoid(w_xz(x) + w_hz(h))
+                r = torch.sigmoid(w_xz(x) + w_hr(h))
+                g = torch.tanh(w_xg(x) + w_hg(r * h))
+                h = h * z + (1 - z) * g
+
+                # can't use `h.set_` because "the derivate for
+                # set_ is not implemented" (RuntimeError)
+                layer_states[i] = h
+                x = drop(h)
+
+            y[:, s, :] = self.weights_hy(x)
+
+        layer_output = y
+        hidden_state = torch.stack(layer_states, dim=1)
         return layer_output, hidden_state

@@ -230,7 +230,7 @@ class RNNTrainer(Trainer):
     def train_epoch(self, dl_train: DataLoader, **kw):
         # TODO: Implement modifications to the base method, if needed.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.hidden_state = None
         # ========================
         return super().train_epoch(dl_train, **kw)
 
@@ -254,7 +254,20 @@ class RNNTrainer(Trainer):
         # - Update params
         # - Calculate number of correct char predictions
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        y_scores, self.hidden_state = self.model(x, hidden_state=self.hidden_state)
+        # need to transpose to match the shape the loss function
+        # (CrossEntropy in the notebook) expects
+        y_scores = torch.transpose(y_scores, 1, 2)
+        loss = self.loss_fn(y_scores, y)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        self.hidden_state = self.hidden_state.detach()
+        self.hidden_state.requires_grad = False
+
+        y_pred = torch.argmax(y_scores, dim=1)
+        num_correct = torch.sum(y == y_pred)
         # ========================
 
         # Note: scaling num_correct by seq_len because each sample has seq_len
