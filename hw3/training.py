@@ -317,11 +317,13 @@ class BlocksTrainer(Trainer):
         # - Optimize params
         # - Calculate number of correct predictions
         # ====== YOUR CODE: ======
+        N = X.shape[0]
+        x = X.reshape(N, -1)
         if self.device:
-            X = X.to(self.device)
+            x = x.to(self.device)
             y = y.to(self.device)
             
-        class_scores = self.model(X)
+        class_scores = self.model(x)
         loss = self.loss_fn(class_scores, y).numpy()
         self.optimizer.zero_grad()
         dout = self.loss_fn.backward()
@@ -355,8 +357,11 @@ class TorchTrainer(Trainer):
 
     def train_batch(self, batch) -> BatchResult:
         X, y = batch
+        
+        N = X.shape[0]
+        x = X.reshape(N, -1)
         if self.device:
-            X = X.to(self.device)
+            x = x.to(self.device)
             y = y.to(self.device)
 
         # TODO: Train the PyTorch model on one batch of data.
@@ -365,7 +370,7 @@ class TorchTrainer(Trainer):
         # - Optimize params
         # - Calculate number of correct predictions
         # ====== YOUR CODE: ======
-        class_scores = self.model(X)
+        class_scores = self.model(x)
         self.optimizer.zero_grad()
         loss = self.loss_fn(class_scores, y)
         loss.backward()
@@ -389,9 +394,10 @@ class TorchTrainer(Trainer):
             # - Calculate number of correct predictions
             # ====== YOUR CODE: ======
             class_scores = self.model(X)
-            loss = self.loss_fn(class_scores, y).numpy()
+            loss = self.loss_fn(class_scores, y)
             y_pred = torch.argmax(class_scores, dim=1)
-            num_correct = torch.sum(y == y_pred).numpy()
+            num_correct = torch.sum(y == y_pred).to('cpu').detach().numpy()
+            loss = loss.to('cpu').detach().numpy().tolist()
             # ========================
 
         return BatchResult(loss, num_correct)

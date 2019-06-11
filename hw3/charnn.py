@@ -21,8 +21,12 @@ def char_maps(text: str):
     # TODO: Create two maps as described in the docstring above.
     # It's best if you also sort the chars before assigning indices, so that
     # they're in lexical order.
+    char_to_idx, idx_to_char = {},{}
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    unique_chars = sorted(list(set(text)))
+    for i, char in enumerate(unique_chars):
+        char_to_idx[char] = i
+        idx_to_char[i] = char
     # ========================
     return char_to_idx, idx_to_char
 
@@ -38,7 +42,11 @@ def remove_chars(text: str, chars_to_remove):
     """
     # TODO: Implement according to the docstring.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    n_removed = 0
+    text_clean = text
+    for char in chars_to_remove:
+        n_removed += text_clean.count(char)
+        text_clean = text_clean.replace(char,"")
     # ========================
     return text_clean, n_removed
 
@@ -58,7 +66,9 @@ def chars_to_onehot(text: str, char_to_idx: dict) -> Tensor:
     """
     # TODO: Implement the embedding.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    result = torch.zeros((len(text),len(char_to_idx.keys())),dtype = torch.int8)
+    for i,char in enumerate(text):
+        result[i][char_to_idx[char]] = 1
     # ========================
     return result
 
@@ -73,9 +83,15 @@ def onehot_to_chars(embedded_text: Tensor, idx_to_char: dict) -> str:
     :return: A string containing the text sequence represented by the
     embedding.
     """
+    
     # TODO: Implement the reverse-embedding.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    import numpy as np
+    result = ""
+    for char_one_hot_encoded in embedded_text: #iterate every row - every row is a char
+        index = np.where(char_one_hot_encoded == 1)[0][0]
+#         print(type(char_one_hot_encoded))
+        result += idx_to_char[index]
     # ========================
     return result
 
@@ -104,7 +120,21 @@ def chars_to_labelled_samples(text: str, char_to_idx: dict, seq_len: int,
     # 3. Create the labels tensor in a similar way and convert to indices.
     # Note that no explicit loops are required to implement this function.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    import numpy as np
+    embeded_text = chars_to_onehot(text[:-1], char_to_idx) #no need of last char
+    splits = torch.split(embeded_text, seq_len, 0) #split the embeded_text every seq_len rows
+    if(splits[-1].shape[0] != splits[0].shape[0]): #if the last split its not a complete one, drop it
+        splits = splits[:-1]
+    samples = torch.stack(splits)           #stack them together in one tensor
+    N = samples.shape[0]
+    print("length of text is" + str(len(text)))
+    print("N is " + str(N))
+    print(seq_len*(N-1)+seq_len-1)
+    labels = torch.zeros((N,seq_len),dtype = torch.int8)
+    for i in range(N):
+        for j in range(seq_len):
+            char = text[i*seq_len+j+1]
+            labels[i][j] = char_to_idx[char]
     # ========================
     return samples, labels
 
@@ -170,7 +200,7 @@ class MultilayerGRU(nn.Module):
         """
         :param in_dim: Number of input dimensions (at each timestep).
         :param h_dim: Number of hidden state dimensions.
-        :param out_dim: Number of input dimensions (at each timestep).
+        :param out_dim: Number of output dimensions (at each timestep).
         :param n_layers: Number of layer in the model.
         :param dropout: Level of dropout to apply between layers. Zero
         disables.
