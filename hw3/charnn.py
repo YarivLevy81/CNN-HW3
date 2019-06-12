@@ -1,4 +1,5 @@
 import re
+import itertools as it
 
 import torch
 import torch.nn as nn
@@ -16,17 +17,15 @@ def char_maps(text: str):
         integer from zero to the number of unique chars in the text.
         - idx_to_char, a mapping from an index to the character
         represented by it. The reverse of the above map.
-
     """
     # TODO: Create two maps as described in the docstring above.
     # It's best if you also sort the chars before assigning indices, so that
     # they're in lexical order.
-    char_to_idx, idx_to_char = {},{}
     # ====== YOUR CODE: ======
-    unique_chars = sorted(list(set(text)))
-    for i, char in enumerate(unique_chars):
-        char_to_idx[char] = i
-        idx_to_char[i] = char
+    chars = list(sorted(set(text)))
+    indices = range(len(chars))
+    char_to_idx = dict(zip(chars, indices))
+    idx_to_char = dict(zip(indices, chars))
     # ========================
     return char_to_idx, idx_to_char
 
@@ -42,11 +41,8 @@ def remove_chars(text: str, chars_to_remove):
     """
     # TODO: Implement according to the docstring.
     # ====== YOUR CODE: ======
-    n_removed = 0
-    text_clean = text
-    for char in chars_to_remove:
-        n_removed += text_clean.count(char)
-        text_clean = text_clean.replace(char,"")
+    rx = re.compile('[{}]'.format(''.join(re.escape(c) for c in chars_to_remove)))
+    text_clean, n_removed = rx.subn('', text)
     # ========================
     return text_clean, n_removed
 
@@ -66,10 +62,14 @@ def chars_to_onehot(text: str, char_to_idx: dict) -> Tensor:
     """
     # TODO: Implement the embedding.
     # ====== YOUR CODE: ======
-    result = torch.zeros((len(text),len(char_to_idx.keys())),dtype = torch.int8)
-    for i,char in enumerate(text):
-        index = char_to_idx[char]
-        result[i][index] = 1
+    N, D = len(text), len(char_to_idx)
+    result = torch.zeros((N, D), dtype=torch.int8)
+    for i, character in enumerate(text):
+        result[i, char_to_idx[character]] = 1
+    ## does using `scatter` allow GPU-optimization?
+    #result = torch.zeros(len(text), len(char_to_idx), dtype=torch.int8)
+    #indices = torch.tensor([char_to_idx[c] for c in text])
+    #result.scatter_(1, indices.view(-1,1), 1)
     # ========================
     return result
 
@@ -84,14 +84,10 @@ def onehot_to_chars(embedded_text: Tensor, idx_to_char: dict) -> str:
     :return: A string containing the text sequence represented by the
     embedding.
     """
-    
     # TODO: Implement the reverse-embedding.
     # ====== YOUR CODE: ======
-    import numpy as np
-    result = ""
-    for char_one_hot_encoded in embedded_text: #iterate every row - every row is a char
-        index = np.where(char_one_hot_encoded == 1)[0][0]
-        result += idx_to_char[index]
+    indices = torch.argmax(embedded_text, dim=1)
+    result = "".join(idx_to_char[idx.item()] for idx in indices)
     # ========================
     return result
 
@@ -120,23 +116,18 @@ def chars_to_labelled_samples(text: str, char_to_idx: dict, seq_len: int,
     # 3. Create the labels tensor in a similar way and convert to indices.
     # Note that no explicit loops are required to implement this function.
     # ====== YOUR CODE: ======
-    import numpy as np
-    embeded_text = chars_to_onehot(text[:-1], char_to_idx) #no need of last char
+    embed_text = chars_to_onehot(text, char_to_idx).to(device)
+    char_labels = torch.argmax(embed_text, dim=1).to(device)
+    embed_text = embed_text[:-1,:]
+    char_labels = char_labels[1:]
+    samples = torch.split(embed_text, seq_len, dim=0)
+    labels = torch.split(char_labels, seq_len, dim=0)
+    if len(char_labels) % seq_len != 0:
+        samples = samples[:-1]
+        labels = labels[:-1]
     
-    #embeded_text is a one_hot "tensor" of all text
-    
-    splits = torch.split(embeded_text, seq_len, 0) #split the embeded_text every seq_len rows 
-    #splits is a list of 2D-tensors
-    if(splits[-1].shape[0] != splits[0].shape[0]): #if the last split its not a complete one, drop it
-        splits = splits[:-1]
-    samples = torch.stack(splits)           #stack them together in one tensor
-    # samples is a 3D-tensor
-    N = samples.shape[0]
-    labels = torch.zeros((N,seq_len),dtype = torch.int8)
-    for i in range(N):
-        for j in range(seq_len):
-            char = text[i*seq_len+j+1]
-            labels[i][j] = char_to_idx[char]
+    samples = torch.stack(samples)
+    labels = torch.stack(labels)
     # ========================
     return samples, labels
 
@@ -150,11 +141,13 @@ def hot_softmax(y, dim=0, temperature=1.0):
     :param temperature: Temperature.
     :return: Softmax computed with the temperature parameter.
     """
-    # TODO: Implement based on the above.
+    # DONE: Implement based on the above.
+    # ====== YOUR CODE: ======
     if temperature == 0.0:
         raise ValueError("Temperature must not be zero")
 
     result = F.softmax(y / temperature, dim=dim)
+    # ========================
     return result
 
 
@@ -214,7 +207,7 @@ class MultilayerGRU(nn.Module):
         """
         :param in_dim: Number of input dimensions (at each timestep).
         :param h_dim: Number of hidden state dimensions.
-        :param out_dim: Number of output dimensions (at each timestep).
+        :param out_dim: Number of input dimensions (at each timestep).
         :param n_layers: Number of layer in the model.
         :param dropout: Level of dropout to apply between layers. Zero
         disables.
@@ -285,7 +278,7 @@ class MultilayerGRU(nn.Module):
         of shape (B, S, O) where B,S are as above and O is the output
         dimension.
         The hidden_state tensor is the final hidden state, per layer, of shape
-        (B, L, H) as above.
+            (B, L, H) as above.
         """
         batch_size, seq_len, _ = input.shape
 
@@ -303,6 +296,7 @@ class MultilayerGRU(nn.Module):
         # You'll need to go layer-by-layer from bottom to top (see diagram).
         # Tip: You can use torch.stack() to combine multiple tensors into a
         # single tensor in a differentiable manner.
+        # ====== YOUR CODE: ======
         y = torch.zeros_like(layer_input)
         for s in range(seq_len):
             x = layer_input[:, s, :]
@@ -321,4 +315,5 @@ class MultilayerGRU(nn.Module):
 
         layer_output = y
         hidden_state = torch.stack(layer_states, dim=1)
+        # ========================
         return layer_output, hidden_state
