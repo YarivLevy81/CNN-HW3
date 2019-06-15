@@ -376,20 +376,17 @@ class TorchTrainer(Trainer):
 
     def train_batch(self, batch) -> BatchResult:
         X, y = batch
-        
-        N = X.shape[0]
-        x = X.reshape(N, -1)
         if self.device:
-            x = x.to(self.device)
+            X = X.to(self.device)
             y = y.to(self.device)
 
-        # TODO: Train the PyTorch model on one batch of data.
+        # DONE: Train the PyTorch model on one batch of data.
         # - Forward pass
         # - Backward pass
         # - Optimize params
         # - Calculate number of correct predictions
         # ====== YOUR CODE: ======
-        class_scores = self.model(x)
+        class_scores = self.model(X)
         self.optimizer.zero_grad()
         loss = self.loss_fn(class_scores, y)
         loss.backward()
@@ -408,7 +405,7 @@ class TorchTrainer(Trainer):
             y = y.to(self.device)
 
         with torch.no_grad():
-            # TODO: Evaluate the PyTorch model on one batch of data.
+            # DONE: Evaluate the PyTorch model on one batch of data.
             # - Forward pass
             # - Calculate number of correct predictions
             # ====== YOUR CODE: ======
