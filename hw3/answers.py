@@ -306,39 +306,19 @@ def part6_gan_hyperparams():
 
 part6_q1 = r"""
 **Your answer:**
-
-
-Write your answer using **markdown** and $\LaTeX$:
-```python
-# A code block
-a = 2
-```
-An equation: $e^{i\pi} -1 = 0$
-
+We are training 2 different networks concurently which have adversary objectives.<br>
+The discriminator parameters gradients are not affected at all by the generator's parameter's gradients, moreover the gradients of the generator's parameters calculated w.r.t the discriminator loss will tend to make the generator worse because the objective is to minimize the discriminator loss.<br>
+When training the generator we calculate gradients in both networks since the gradients of the generator's parameters are calculated w.r.t the discriminator's gradients.
 """
 
 part6_q2 = r"""
 **Your answer:**
-
-
-Write your answer using **markdown** and $\LaTeX$:
-```python
-# A code block
-a = 2
-```
-An equation: $e^{i\pi} -1 = 0$
-
+1. No, since we are training the networks on adverse objectives, in every step both networks will get better at their objectives. If the genertor loss is below some threshold is doesn't mean that it converged since the loss function is also dependent on the discriminator.
+2. It means that the generator learns faster than the discriminator, in order to improve learning it is better to enhance the discriminator's learning.
 """
 
 part6_q3 = r"""
 **Your answer:**
-
-
-Write your answer using **markdown** and $\LaTeX$:
-```python
-# A code block
-a = 2
-```
-An equation: $e^{i\pi} -1 = 0$
+We didn't implented the VAE in part 5.
 
 """
